@@ -4,9 +4,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.65.0"
     }
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0.2"
+  }
+
+  required_version = ">= 1.3.0"
+}
+
+provider "aws" {
+  region = "ap-south-1"  # Change to your desired AWS region
+}
+
+resource "aws_instance" "example" {
+  ami           = "terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.65.0"
     }
   }
 
@@ -14,11 +26,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-west-2"  # Change to your desired AWS region
-}
-
-provider "docker" {
-  host = "tcp://${aws_instance.example.public_ip}:2376"  # Access Docker daemon on EC2 instance
+  region = "ap-south-1"  # Change to your desired AWS region
 }
 
 resource "aws_instance" "example" {
@@ -38,52 +46,49 @@ resource "aws_instance" "example" {
               service docker start
               usermod -a -G docker ec2-user
               EOF
+}
 
-  provisioner "local-exec" {
-    command = "echo 'Waiting for Docker to be ready...'"
+resource "aws_ami_from_instance" "docker_ami" {
+  name               = "docker-ami"
+  source_instance_id = aws_instance.example.id
+  description        = "AMI with Docker installed"
+
+  tags = {
+    Name = "docker-ami"
   }
 }
 
-data "template_file" "docker_config" {
-  template = <<-EOF
-    [Service]
-    ExecStart=
-    ExecStart=/usr/bin/dockerd --host=tcp://0.0.0.0:2376
-    EOF
+output "ami_id" {
+  value = aws_ami_from_instance.docker_ami.id
 }
+"  # Update with the latest Amazon Linux 2 AMI ID for your region
+  instance_type = "t2.micro"  # Choose instance type based on your requirements
+  key_name       = "jenkins-windows"  # SSH key pair name
 
-resource "null_resource" "configure_docker" {
-  provisioner "remote-exec" {
-    inline = [
-      "sudo mkdir -p /etc/docker",
-      "echo '${data.template_file.docker_config.rendered}' | sudo tee /etc/docker/daemon.json",
-      "sudo systemctl restart docker"
-    ]
-
-    connection {
-      type        = "ssh"
-      host        = aws_instance.example.public_ip
-      user        = "ec2-user"
-      private_key = file("C:/path/to/jenkins-windows")
-    }
+  tags = {
+    Name = "docker-instance"
   }
 
-  depends_on = [aws_instance.example]
+  # Add a user data script to install Docker
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y docker
+              service docker start
+              usermod -a -G docker ec2-user
+              EOF
 }
 
-resource "docker_image" "nginx" {
-  name = "nginx:latest"
-}
+resource "aws_ami_from_instance" "docker_ami" {
+  name               = "docker-ami"
+  source_instance_id = aws_instance.example.id
+  description        = "AMI with Docker installed"
 
-resource "docker_container" "nginx" {
-  image = docker_image.nginx.name
-  name  = "my-nginx-container"
-  ports {
-    internal = 80
-    external = 80
+  tags = {
+    Name = "docker-ami"
   }
 }
 
-output "instance_public_ip" {
-  value = aws_instance.example.public_ip
+output "ami_id" {
+  value = aws_ami_from_instance.docker_ami.id
 }
